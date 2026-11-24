@@ -26,6 +26,7 @@ from aider.coders.base_coder import UnknownEditFormat
 from aider.commands import Commands, SwitchCoder
 from aider.copypaste import ClipboardWatcher
 from aider.deprecated import handle_deprecated_model_args
+from aider.debugwait import apply_debugwait
 from aider.format_settings import format_settings, scrub_sensitive_info
 from aider.history import ChatSummary
 from aider.io import InputOutput
@@ -449,10 +450,13 @@ def sanity_check_repo(repo, io):
 
 
 def main(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
-    report_uncaught_exceptions()
-
     if argv is None:
         argv = sys.argv[1:]
+    else:
+        argv = list(argv)
+    argv = apply_debugwait(argv)
+
+    report_uncaught_exceptions()
 
     if git is None:
         git_root = None

@@ -684,6 +684,16 @@ def get_parser(default_config_files, git_root):
         default=False,
     )
     group.add_argument(
+        "--debugwait",
+        metavar="SECONDS",
+        type=float,
+        default=0,
+        help=(
+            "Wait SECONDS before startup so a debugger can attach; "
+            "consumed before normal argument parsing (default: 0)"
+        ),
+    )
+    group.add_argument(
         "--show-repo-map",
         action="store_true",
         help="Print the repo map and exit (debug)",
