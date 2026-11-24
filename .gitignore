@@ -1,4 +1,5 @@
 .DS_Store
+.vs/
 .vscode/
 aider.code-workspace
 *.pyc
@@ -17,3 +18,4 @@ aider/_version.py
 .gitattributes
 tmp.benchmarks/
 .docker_bash_history
+.env

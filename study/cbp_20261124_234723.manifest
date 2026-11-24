@@ -1,0 +1,30 @@
+# CBP breakpoint plan
+# Goal: 覆盖启动、配置、模型选择、Coder 创建、GUI、Prompt、provider 请求、编辑、lint 和提交全路径
+# Sources:
+#   ca=study/ca_20261123_231905.txt
+#   ce=study/ce_20261123_231135.txt
+# Generated: 2026-11-24 23:47:23 +08:00
+
+[StartupModel]
+# 假设 1：启动参数、配置、模型选择或 Coder/GUI 路由与预期不一致。
+aider/main.py:457
+aider/main.py:483
+aider/main.py:781
+aider/main.py:826
+aider/main.py:977
+aider/main.py:675
+aider/gui.py:422
+
+[PromptRequest]
+# 假设 2：Prompt 组装、模型发送或 provider 请求参数存在偏差。
+aider/coders/base_coder.py:1429
+aider/coders/base_coder.py:1459
+aider/coders/base_coder.py:1797
+aider/models.py:1036
+
+[EditVerifyCommit]
+# 假设 3：模型回复后的编辑、lint 或自动提交没有按预期执行。
+aider/coders/base_coder.py:1585
+aider/coders/base_coder.py:2304
+aider/coders/base_coder.py:1600
+aider/coders/base_coder.py:2383

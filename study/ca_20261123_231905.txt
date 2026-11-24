@@ -1,0 +1,206 @@
+CA 静态调用栈：Aider
+生成时间：2026-11-23 23:19:05 +08:00
+工作区：C:\Code\AI\aider_study
+基线提交：5dc9490bb Merge pull request #5173 from Cyberfilo/feat/anthropic_models-list-add-opus-4-5
+分析范围：正式 CLI 主入口到模型、编辑、提交和验证循环
+
+
+[aider]                                      # 产品入口
+  [console script: aider.main:main]          # pyproject 正式命令
+  [python -m aider]                          # Python 模块入口
+    [aider/__main__.py::main()]              # 复用同一入口
+
+
+[aider.main:main]                            # aider/main.py:452
+  [apply_debugwait(argv)]                    # 启动等待门控
+    # aider/debugwait.py:9；正数打印 PID，0 不等待。
+  [report_uncaught_exceptions()]             # 安装异常报告
+  [get_git_root()]                           # 搜索 Git 工作树
+  [build default config files]               # 汇总配置路径
+  [get_parser(config_files, git_root)]       # 创建参数解析器
+  [parser.parse_known_args(argv)]            # 预热配置解析
+  [load_dotenv_files(git_root, args.env_file, args.encoding)]
+    # 加载 .env；长调用采用下一行注释。
+  [parser.parse_args(argv)]                  # 形成最终参数
+  [InputOutput(...)]                         # 创建交互适配层
+    [InputOutput.rule()]                     # 输出启动分隔线
+  [configure env and API keys]               # 覆盖运行时凭据
+  [Analytics(...)]                           # 遥测初始化，后续折叠
+  [args.gui -> launch_gui(argv)]             # 可选 GUI 分支
+    [streamlit.web.cli.main(...)]            # 启动 Streamlit Server
+      [gui.py -> cli_main(return_coder=True)] # GUI 内层复用 main
+        [Coder.run_stream(prompt)]           # 复用共享 Coder
+  [setup_git(git_root, io)]                  # 确认仓库与忽略规则
+  [register_models(...)]                     # 加载模型设置
+  [register_litellm_models(...)]             # 加载模型元数据
+  [select_default_model(args, io, analytics)] # 选择模型或 OAuth
+  [models.Model(...)]                        # 创建模型配置
+    [Model.get_model_info()]                 # 查询上下文和价格
+    [Model.validate_environment()]           # 检查 provider 凭据
+    [Model.configure_model_settings()]       # 应用模型设置
+    [Model.get_weak_model()]                 # 选择弱模型
+    [Model.get_editor_model()]               # 选择 editor 模型
+  [parse_lint_cmds(...)]                     # 解析 lint 配置
+  [GitRepo(io, fnames, ...)]                 # 定位仓库边界
+  [sanity_check_repo(repo, io)]              # 校验仓库可用性
+  [Commands(io, None, ...)]                  # 创建命令分派器
+  [ChatSummary([weak_model, main_model], ...)] # 创建历史摘要器
+  [Coder.create(...)]                        # 选择 Coder 子类
+    [resolve edit_format]                    # 参数或模型决定格式
+    [iterate coders.__all__]                 # 按 edit_format 路由
+    [Coder subclass constructor]             # 实例化具体编辑器
+      [Coder.__init__(...)]                  # base_coder.py:299
+        [initialize conversation state]      # 消息和成本等状态
+        [bind Commands]                      # 命令回指 Coder
+        [register editable files]            # abs_fnames
+        [register read-only files]           # abs_read_only_fnames
+        [RepoMap(...)]                       # 构建仓库地图
+        [ChatSummary(...)]                   # 恢复或摘要历史
+        [Linter(...)]                        # 初始化验证器
+  [Coder.run()]                              # CLI 交互主循环
+  [Coder.run(with_message=...)]              # 单次消息分支
+  [SwitchCoder -> Coder.create(from_coder=...)] # 模式切换后重建
+
+
+[Coder.run]                                  # base_coder.py:876
+  [Coder.copy_context()]                     # 可选复制上下文
+  [Coder.get_input()]                        # 读取用户输入
+    [InputOutput.get_input(...)]             # prompt_toolkit 输入
+  [Coder.run_one(user_message, preproc)]     # 处理单轮消息
+  [Coder.show_undo_hint()]                   # 提示可撤销提交
+  [KeyboardInterrupt -> keyboard_interrupt()] # 保留会话状态
+  [EOFError]                                 # 结束程序
+
+
+[Coder.run_one]                              # base_coder.py:924
+  [Coder.init_before_message()]              # 重置单轮状态
+    [GitRepo.get_head_commit_sha()]          # 记录消息前提交
+  [Coder.preproc_user_input(...)]            # 输入预处理
+    [Commands.is_command(inp)]               # 判断斜杠命令
+      [Commands.run(inp)]                    # 命令可绕过模型
+        [Commands.do_run(...)]               # 动态调用 cmd_xxx
+    [Coder.check_for_file_mentions(inp)]     # 自动加入文件
+    [Coder.check_for_urls(inp)]              # 处理网页引用
+  [Coder.send_message(message)]              # 模型和编辑主流程
+  [reflection loop]                          # reflected_message 重试
+    # max_reflections 默认 3；达到上限后停止。
+
+
+[Coder.send_message]                         # base_coder.py:1419
+  [append user message]                      # 写入 cur_messages
+  [Coder.format_messages()]                  # 组装完整上下文
+    [Coder.format_chat_chunks()]             # 创建 ChatChunks
+      [Coder.choose_fence()]                 # 选择代码围栏
+      [Coder.fmt_system_prompt(...)]         # 格式化系统提示
+      [Coder.summarize_end()]                # 等待历史摘要
+      [Coder.get_repo_messages()]            # 注入仓库地图
+        [Coder.get_repo_map()]               # 提取文件和标识符
+          [Coder.get_cur_message_text()]     # 当前轮文本
+          [Coder.get_file_mentions(...)]     # 文件提及
+          [Coder.get_ident_filename_matches(...)] # 标识符匹配
+          [RepoMap.get_repo_map(...)]        # 排序并压缩地图
+      [Coder.get_readonly_files_messages()]  # 注入只读参考
+      [Coder.get_chat_files_messages()]      # 注入可编辑文件
+      [Model.token_count(...)]               # 计算上下文预算
+    [ChatChunks.all_messages()]              # 合并最终消息数组
+  [Coder.check_tokens(messages)]             # 检查输入上限
+  [Coder.warm_cache(chunks)]                 # 可选缓存预热
+  [Coder.send(messages, functions)]          # 调用模型
+    [Model.send_completion(messages, ...)]   # models.py:985
+      [build LiteLLM kwargs]                 # 模型和工具参数
+      [litellm.completion(**kwargs)]         # 第三方网络调用
+  [Coder.show_send_output_stream(completion)] # 流式解析回复
+    [InputOutput.assistant_output(...)]      # 用户可见输出
+  [Coder.calculate_and_show_tokens_and_cost(...)]
+    # 长调用回退；统计 token 和成本。
+  [Coder.add_assistant_reply_to_cur_messages()] # 保留回复
+  [LiteLLM retry loop]                       # 指数退避重试
+    [LiteLLMExceptions.get_ex_info(err)]     # 错误分类
+  [Coder.check_for_file_mentions(content)]   # 回复中的文件提及
+  [Coder.reply_completed()]                  # 子类扩展点
+  [Coder.apply_updates()]                    # 应用模型编辑
+    [Coder.get_edits()]                      # 子类解析编辑格式
+    [Coder.apply_edits_dry_run(edits)]       # 预校验编辑
+    [Coder.prepare_to_edit(edits)]           # 校验文件权限
+      [Coder.allowed_to_edit(path)]          # 检查仓库和确认
+      [Coder.dirty_commit()]                 # 先提交脏文件
+        [GitRepo.commit(...)]                # 保留撤销基线
+    [Coder.apply_edits(edits)]               # 子类写入文件
+  [Coder.auto_commit(edited)]                # 自动提交 Aider 修改
+    [Coder.get_context_from_history(...)]    # 提交说明上下文
+    [GitRepo.commit(...)]                    # repo.py:131
+      [GitRepo.get_diffs(...)]               # 获取代码差异
+      [GitRepo.get_commit_message(...)]      # 生成提交信息
+        [Model.simple_send_with_retries(...)] # 弱模型优先
+          [Model.send_completion(...)]       # 再次进入 LiteLLM
+  [Coder.lint_edited(edited)]                # 自动 lint
+    [Linter.lint(...)]                       # 静态检查
+    [Coder.auto_commit(edited, "Ran the linter")] # 提交修复
+  [Coder.run_shell_commands()]               # 执行建议命令
+    [Coder.handle_shell_commands(...)]       # 用户确认后执行
+      [run_cmd(...)]                         # 子进程运行
+  [Commands.cmd_test(...)]                   # 自动测试
+    [Commands.cmd_run(...)]                  # 执行测试命令
+      [run_cmd(...)]                         # 获取输出和状态
+  [reflected_message]                        # 失败反馈回流
+    # malformed edit、lint、test 可触发下一轮。
+
+
+[主要分支]                                   # 主循环外重点
+  [--lint]                                   # 直接运行 lint
+  [--test]                                   # 直接运行测试
+  [--commit]                                 # 提交现有修改
+  [--show-prompts]                           # 输出模型上下文
+  [--show-repo-map]                          # 输出仓库地图
+  [--apply]                                  # 应用预生成编辑
+  [--message / --message-file]               # 单次运行后退出
+  [--exit]                                   # 初始化后退出
+  [SwitchCoder]                              # 模式切换
+  [--gui / --browser]                        # 可选 Streamlit 前端
+
+
+[关键状态流]                                 # 数据流转
+  argv                                       # 原始启动参数
+    -> apply_debugwait                       # 消费调试等待
+    -> ConfigArgParse Namespace              # 形成参数对象
+    -> dotenv 和 API Key                     # 补全环境
+    -> Model + GitRepo + InputOutput         # 创建运行边界
+    -> Coder                                 # 统一会话对象
+  abs_fnames                                 # 可编辑文件集合
+  abs_read_only_fnames                       # 只读参考文件集合
+  cur_messages                               # 当前轮 user/assistant
+  done_messages                              # 历史消息，经摘要压缩
+  ChatChunks                                 # system、examples、readonly、repo
+                                             # done、chat_files、cur、reminder
+  partial_response_content                   # 当前模型回复
+  reflected_message                          # 下一轮自动反馈
+  aider_edited_files                         # 本轮成功修改文件
+  last_aider_commit_hash                     # 最近 Aider 提交
+  lint_outcome                               # lint 结果
+  test_outcome                               # 测试结果
+
+
+[终止和容错]                                 # 关键边界
+  EOF                                        # 结束交互
+  KeyboardInterrupt                          # 记录中断并保留会话
+  ContextWindowExceededError                 # token 耗尽路径
+  LiteLLM retry                              # 指数退避
+  malformed edit                             # 写入反射反馈
+  lint failure                               # 可触发模型修复
+  test failure                               # 可触发模型修复
+  SwitchCoder                                # 外层重建 Coder
+
+
+总备注：这份静态调用链能证明什么，不能证明什么
+能证明：
+  - CLI、单次消息和标准 GUI 都复用 main 与 Coder 核心。 # 入口一致
+  - --debugwait 位于解析、模型和 Coder 初始化之前。 # 启动门控
+  - 输入消息、仓库地图和文件内容如何组成模型上下文。 # Prompt 流程
+  - 模型回复如何变成编辑、提交、lint、shell 和测试动作。 # 编辑流程
+  - provider 网络调用集中在 send_completion 到 litellm。 # 外部集成
+不能证明：
+  - 无参数时实际选中的模型和 Coder 子类。 # 需运行时配置
+  - Streamlit、LiteLLM、GitPython 的内部调用栈。 # 第三方内部
+  - OAuth、网络请求和确认提示实际走了哪些分支。 # 需运行时证据
+  - 动态插件或模型设置覆盖后的行为。 # 需运行时观察
+  - 当前机器能否完整启动 Aider。 # 本地缺少运行依赖
